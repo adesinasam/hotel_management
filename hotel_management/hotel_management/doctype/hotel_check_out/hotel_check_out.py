@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2020, Havenir and contributors
+# Copyright (c) 2024, Glistercp and Contributors
 # For license information, please see license.txt
 
 from __future__ import unicode_literals
@@ -131,14 +131,15 @@ class HotelCheckOut(Document):
 
     @frappe.whitelist()
     def get_items(self):
+        # Getting Hotel Check In Details
         hotel_check_in = frappe.get_doc('Hotel Check In', self.check_in_id)
         check_in_dict = {}
-
         for room in hotel_check_in.rooms:
             if room.room_no == self.room:
                 check_in_dict['room'] = room.room_no
                 check_in_dict['price'] = room.price
 
+        # Geting Hotel Food Order Details
         total_food_discount = 0
         total_service_charges = 0
         food_order_list = []
@@ -148,41 +149,68 @@ class HotelCheckOut(Document):
             'check_in_id': self.check_in_id,
             'is_paid': 0
         })
-
         for food_order in room_food_order_list:
             food_order_dict = {}
             food_order_doc = frappe.get_doc('Hotel Food Order', food_order.name)
-            food_order_dict.update({
-                'name': food_order_doc.name,
-                'date': food_order_doc.posting_date,
-                'order_type': food_order_doc.order_type,
-                'items': []
-            })
+            food_order_dict['name'] = food_order_doc.name
+            food_order_dict['date'] = food_order_doc.posting_date
+            food_order_dict['order_type'] = food_order_doc.order_type
+            food_order_dict['items'] = []
             total_service_charges += food_order_doc.service_charges
             total_food_discount += food_order_doc.discount_amount
-
+            # Looping through items
             for item in food_order_doc.items:
-                food_item_dict = {
-                    'item': item.item,
-                    'qty': item.qty,
-                    'rate': item.rate,
-                    'amount': item.amount
-                }
+                food_item_dict = {}
+                food_item_dict['item'] = item.item
+                food_item_dict['qty'] = item.qty
+                food_item_dict['rate'] = item.rate
+                food_item_dict['amount'] = item.amount
                 food_order_dict['items'].append(food_item_dict)
-
             food_order_list.append(food_order_dict)
 
-        # Similar process for laundry orders
+        # Getting Hotel Laundry Order Details
+        laundry_order_list = []
+        room_laundry_order_list = frappe.get_list('Hotel Laundry Order', filters={
+            'status': 'To Check Out',
+            'room': self.room,
+            'check_in_id': self.check_in_id
+        })
+        for laundry_order in room_laundry_order_list:
+            laundry_order_dict = {}
+            laundry_order_doc = frappe.get_doc(
+                'Hotel Laundry Order', laundry_order.name)
+            laundry_order_dict['name'] = laundry_order_doc.name
+            laundry_order_dict['date'] = laundry_order_doc.posting_date
+            laundry_order_dict['order_type'] = laundry_order_doc.order_type
+            laundry_order_dict['items'] = []
+            # Looping through items
+            for item in laundry_order_doc.items:
+                laundry_item_dict = {}
+                laundry_item_dict['item'] = item.item
+                laundry_item_dict['qty'] = item.qty
+                laundry_item_dict['rate'] = item.rate
+                laundry_item_dict['amount'] = item.amount
+                laundry_order_dict['items'].append(laundry_item_dict)
+            laundry_order_list.append(laundry_order_dict)
+        stay_days = frappe.utils.data.date_diff(self.check_out, self.check_in)
 
-        stay_days = date_diff(self.check_out, self.check_in)
-
+        # Getting Payments
         payment_entry_list = []
-        room_payment_entry_list = frappe.get_list('Hotel Payment Entry', filters={
-            'check_in_id': self.check_in_id,
+        room_payment_entry_list = frappe.get_list('Hotel Payment Entry',filters={
+            'check_in_id' : self.check_in_id,
             'docstatus': 1,
             'room': self.room
         }, order_by='name asc')
 
-        # Similar process for payment entries
+        for payment in room_payment_entry_list:
+            payment_entry_dict = {}
+            payment_doc = frappe.get_doc('Hotel Payment Entry', payment)
+            payment_entry_dict['payment_entry'] = payment_doc.name
+            if payment_doc.entry_type == 'Receive':
+                payment_entry_dict['amount_paid'] = payment_doc.amount_paid
+            else:
+                payment_entry_dict['amount_paid'] = -payment_doc.amount_paid
+            payment_entry_dict['posting_date'] = payment_doc.posting_date
+            payment_entry_list.append(payment_entry_dict)
 
         return [stay_days, check_in_dict, food_order_list, laundry_order_list, payment_entry_list, total_food_discount, total_service_charges]
