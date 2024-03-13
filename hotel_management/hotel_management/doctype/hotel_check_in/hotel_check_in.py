@@ -36,6 +36,7 @@ class HotelCheckIn(Document):
             room_doc.db_set('check_in_id', None)
             room_doc.db_set('room_status', 'Available')
 
+    @frappe.whitelist()
     def get_room_price(self, room):
         room_price = frappe.get_value('Rooms', {
             'room_number': room
